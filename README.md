@@ -189,7 +189,7 @@ simplification at `GET /api/balances/g1/simplified`, and real settlements at
    public production launch.
 ## Group invitations
 
-Groups are private and join-by-invite, matching the product behavior we want for a household app. A signed-in group member opens **Groups → Invite a roommate**, enters the recipient email, and shares the generated seven-day link. The recipient can preview the group without authentication, then signs up or signs in. The invite token is preserved through Supabase email confirmation, and the API accepts it only when the authenticated email exactly matches the invited email. Acceptance inserts `group_members` and marks the invite accepted; it does not remove the user’s automatically-created personal household.
+Groups are private and join-by-invite, matching the product behavior we want for a household app. A signed-in group member opens **Groups → Invite a roommate**, enters the recipient email, and shares the generated seven-day link. Opening the link verifies its status and shows the group and invited email before sign-in. The recipient signs up or signs in, reviews the invitation, and selects **Accept invitation**. The invite token is preserved through Supabase email confirmation, and the API accepts it only when the authenticated email exactly matches the invited email. Acceptance inserts `group_members` and marks the invite accepted; it does not remove the user’s automatically-created personal household.
 
 Invite links use `PUBLIC_APP_URL` when set. Configure the same public frontend origin for CORS in the deployed API environment:
 

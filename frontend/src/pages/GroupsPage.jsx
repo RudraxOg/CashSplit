@@ -80,7 +80,7 @@ export default function GroupsPage({ groups, overview, activeGroupId, onSelect, 
         <SectionCard title="Invite a roommate">
           <form onSubmit={invite} className="flex gap-2"><input className="rm-input flex-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="roommate@example.com" aria-label="Roommate email" /><button className="rm-btn rm-btn-primary px-4" type="submit"><Link2 size={16} /> Invite</button></form>
           <p className="text-xs rm-text-secondary mt-3">Invite someone to <strong>{groups.find((item) => item.id === activeGroupId)?.name || 'the active group'}</strong>. They must sign in with this email to join.</p>
-          {message && <p className="text-xs mt-2" style={{ color: C.accentDark }}>{message}</p>}
+          {message && <p className="text-xs mt-2" role="status" style={{ color: C.accentDark }}>{message}</p>}
           {inviteLink && (
             <div className="mt-3 rm-animate-in">
               <div className="flex gap-2"><input className="rm-input flex-1 text-xs" value={inviteLink} readOnly aria-label="Invitation link" /><button className="rm-btn rm-btn-ghost px-3 flex items-center gap-1.5" type="button" onClick={copyInvite}>{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}</button></div>
@@ -90,8 +90,8 @@ export default function GroupsPage({ groups, overview, activeGroupId, onSelect, 
                   <li>Send the copied link to the invited email address.</li>
                   <li>They open it and choose <strong>Sign in to join</strong> or <strong>Create an account</strong>.</li>
                   <li>They use the same email address you invited.</li>
-                  <li>They confirm their email if Supabase asks them to.</li>
-                  <li>They open the invitation link again; RoomMate adds them automatically.</li>
+                  <li>They confirm their email if asked.</li>
+                  <li>They review the verified invitation and select <strong>Accept invitation</strong>.</li>
                 </ol>
                 <p className="text-xs mt-3" style={{ color: C.accentDark }}>After acceptance, the group appears in their Groups menu. The link expires in 7 days.</p>
               </div>

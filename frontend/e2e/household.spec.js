@@ -102,17 +102,76 @@ test('monthly budget can be edited and expense repeat defaults to None', async (
 });
 
 test('invite creation uses the app URL and acceptance opens the joined group', async ({ page }) => {
+  let accepted = false;
   await page.route('**/api/groups/g1/invites', (route) => route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ invitePath: '/join/test-token', inviteUrl: 'http://localhost:5173/join/test-token' }) }));
-  await page.route('**/api/invites/test-token/accept', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groupId: 'g2', status: 'accepted' }) }));
-  await page.route('**/api/invites/test-token', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groupId: 'g2', groupName: 'New Household', invitedEmail: 'krishna@example.test', status: 'pending' }) }));
+  await page.route('**/api/invites/test-token/accept', (route) => { accepted = true; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groupId: 'g2', status: 'accepted' }) }); });
+  await page.route('**/api/invites/test-token', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groupId: 'g2', groupName: 'New Household', invitedEmail: 'krishna@example.test', status: accepted ? 'accepted' : 'pending' }) }));
   await page.goto('/app/groups');
   await page.getByLabel('Roommate email').fill('krishna@example.test');
   await page.getByRole('button', { name: 'Invite', exact: true }).click();
   await expect(page.getByLabel('Invitation link')).toHaveValue('http://127.0.0.1:5199/join/test-token');
   await expect(page.getByText(/localhost link only opens on this computer/)).toBeVisible();
   await page.goto('/join/test-token');
+  await expect(page.getByText('Invitation verified')).toBeVisible();
+  await expect(page.getByText('New Household · krishna@example.test')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'You’re in.' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Accept invitation' }).click();
   await expect(page.getByRole('heading', { name: 'You’re in.' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('rm-active-group'))).toBe('g2');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'You’re in.' })).toBeVisible();
+});
+
+test('pasted invite links show verification on auth pages and password visibility works', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.route('**/api/invites/verified-token', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groupId: 'g2', groupName: 'Garden Flat', invitedEmail: 'newroommate@example.test', status: 'pending' }) }));
+  await page.goto('/join/verified-token');
+  await expect(page.getByText('Invitation verified')).toBeVisible();
+  await expect(page.getByText('Garden Flat · newroommate@example.test')).toBeVisible();
+  await page.getByRole('link', { name: 'Sign in to join' }).click();
+  await expect(page.getByLabel('Email')).toHaveValue('newroommate@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('example-password');
+  await page.getByRole('button', { name: 'Show password' }).click();
+  await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'text');
+  await page.getByRole('button', { name: 'Hide password' }).click();
+  await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'password');
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await expect(page.getByText('Invitation verified')).toBeVisible();
+  await expect(page.getByLabel('Email')).toHaveValue('newroommate@example.test');
+  await expect(page.getByLabel('Email')).toHaveAttribute('readonly', '');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.evaluate(() => localStorage.setItem('rm-theme', 'dark'));
+  await page.reload();
+  await expect(page.getByText('Invitation verified')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+  expect(await page.evaluate(() => ({ card: getComputedStyle(document.querySelector('.rm-auth-card')).backgroundColor, text: getComputedStyle(document.querySelector('.rm-auth-card h1')).color, button: getComputedStyle(document.querySelector('.rm-auth-primary-btn')).color }))).toEqual({ card: 'rgb(23, 30, 26)', text: 'rgb(240, 243, 241)', button: 'rgb(9, 37, 27)' });
+  expect(pageErrors).toEqual([]);
+  await context.close();
+});
+
+test('invalid invite links give a clear error instead of a verified claim', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.route('**/api/invites/invalid-token', (route) => route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Invitation not found' }) }));
+  await page.goto('/join/invalid-token');
+  await expect(page.getByRole('heading', { name: 'Invitation unavailable' })).toBeVisible();
+  await page.goto('/signup?invite=invalid-token');
+  await expect(page.getByRole('alert')).toContainText('Invitation not found');
+  await expect(page.getByText('Invitation verified')).toHaveCount(0);
+  await context.close();
+});
+
+test('email confirmation requires a verified session before continuing', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('/verify-email');
+  await page.getByRole('button', { name: 'Check confirmation' }).click();
+  await expect(page.getByRole('alert')).toContainText('Open the confirmation link');
+  await expect(page).toHaveURL(/\/verify-email$/);
+  await context.close();
 });
 
 test('an invitation opened with another account offers account switching', async ({ page }) => {

@@ -22,7 +22,7 @@ The six pending Supabase migrations were applied to the linked CashSplit project
 | Linked Supabase read checks | Passed for group/member/expense/income/chore/shopping/activity/balance/summary queries; new income and budget columns and recurring series table verified after deployment |
 | Income/shared-expense/budget migration tests | Passed in isolated PGlite Postgres: legacy income backfill, household income separation, owner constraint, group requirement for new expenses, repeat income application, budget default and positive-value constraint |
 | Supabase migration apply | Passed: six pending migrations applied in order; follow-up `db push --dry-run` reports the remote database is up to date |
-| `npm --prefix frontend run test:e2e` | Passed: 9 Playwright flows, including corrupted group ID recovery, Android install guidance, dark Groups/sidebar styling, budget editing, expense repeat default, invite creation and acceptance, wrong-account handling, and planning chores ahead with prior assignments (2026-09-25) |
+| `npm --prefix frontend run test:e2e` | Passed: 12 Playwright flows, including corrupted group ID recovery, Android install guidance, dark Groups/sidebar styling, budget editing, expense repeat default, invite verification and explicit acceptance, invalid and wrong-account links, password visibility, email confirmation checks, and planning chores ahead with prior assignments (2026-09-25) |
 | PWA artifact check | Passed: production bundle contains manifest, service worker, and 192/512/maskable icons |
 | Vercel production smoke check | Passed: frontend deep links return 200; `/api/health` returns 200 with Supabase connected |
 
@@ -133,7 +133,7 @@ The API performs actor and household checks before its service-role client calls
 | No app deep links/history | Fixed |
 | Keyboard/dialog/touch accessibility defects | Fixed for audited surfaces |
 | Single oversized production bundle | Fixed with route-level splitting |
-| No frontend tests | Unit tests and nine Playwright household flows added; live auth/invite/settlement E2E expansion pending |
+| No frontend tests | Unit tests and twelve Playwright household flows added; live auth/invite/settlement E2E expansion pending |
 
 ## Remaining deployment and validation work
 
@@ -142,7 +142,7 @@ These items need external configuration, legal input, or a purpose-built test en
 1. The linked project now has `20260924_security_hardening.sql`, `20260925_household_workflows.sql`, `20260925170000_separate_personal_income.sql`, `20260925180000_require_group_for_shared_expenses.sql`, `20260925190000_monthly_group_budget.sql`, and `20260925193000_validate_shared_expense_group.sql`. Validate policies, storage authorization, RPC grants, and data shape with authenticated users before production sign-off.
 2. Run two-user/two-household integration checks for tenant isolation, search, recurrence, receipt access, settings, CSV reconciliation and currency-specific settlements. Post-migration checks so far were read-only.
 3. Configure SMTP and run an end-to-end delivery check for outbox retries, recipient preferences and duplicate prevention. Provider details are pending.
-4. Add live browser acceptance coverage for auth callbacks, invite expiry/wrong-email behavior, and settle/reload money flows; current Playwright coverage is 9 flows with mocked invite creation and acceptance.
+4. Add live browser acceptance coverage for auth callbacks, invite expiry/wrong-email behavior, and settle/reload money flows; current Playwright coverage is 12 flows with mocked invite creation and acceptance.
 5. Obtain legal review of the Privacy and Terms content.
 6. OCR, FX conversion, offline sync, private friend ledgers, payment initiation, bank import, and localization remain future product work. Paid plans/property administration still require real billing and entitlement enforcement before being advertised as available.
 
@@ -178,6 +178,7 @@ The database migrations are **deployed to the linked CashSplit project**. A foll
 - Dark theme now uses theme-aware surfaces for the sidebar invite card, Groups selection and guidance, status cards, form callouts, and toast. Primary buttons use dark text on the dark theme's bright green accent. A browser test checks the Groups/sidebar colors.
 - Home now lets a household member edit the monthly INR budget. The value is saved per group; the budget card counts only expenses dated in the current month. The applied Supabase budget migration added `groups.monthly_budget_minor`; memory mode also supports editing. Add Expense now shows **None** as the default repeat option, which creates a one-time expense.
 - Invite links now use the deployed `PUBLIC_APP_URL` or the trusted app origin instead of always using the first CORS origin. A localhost link is labeled as local-only, pending invites can be regenerated, signup/sign-in keeps the invite token, and accepting a link switches to the newly joined group. The public Vercel URL is configured; the Supabase Auth redirect allowlist still needs confirmation for email and OAuth callbacks. Email delivery remains a separate SMTP setup.
+- Auth pages now use the RoomMate house logo, the app's light/dark tokens, and accessible password visibility controls. A pasted invite link displays a verified group/email summary on the join, sign-in, and sign-up pages; invalid links display an error. The invited account explicitly selects **Accept invitation**, and an accepted link shows a confirmation on return visits. Email confirmation checks the Supabase user state before continuing. Browser coverage now includes invite preview, explicit acceptance, invalid links, password visibility, and a mobile dark-theme auth view.
 - The Chores page plans today's or future assignments from a seven-day strip or date picker and shows earlier assignments per roommate. Timed chores can now specify a start time and duration; the selected day shows them in time order with their end times, while older date-only chores remain under Anytime. Editing can switch between timed and Anytime, recurring instances retain their time slot, and Home/all-chores/history show the time. Migration `20260925213000_chore_time_slots.sql` adds nullable time fields and database checks without changing existing chore rows.
 
 The chore time-slot migration was applied to the linked Supabase project on 2026-09-25. A follow-up dry run found no pending migrations, and a read-only API query confirmed both columns are available. Backend and frontend unit tests, the production build, and all nine Playwright flows passed after this change.

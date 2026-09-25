@@ -105,10 +105,17 @@ export function AuthProvider({ children }) {
     const { error } = await runAuthRequest(() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectUrl(destination) } }));
     throwIfAuthError(error);
   }, []);
-  const requestPasswordReset = useCallback(async (email) => {
+  const requestPasswordReset = useCallback(async (email, inviteToken) => {
     if (!supabase) return unavailable();
-    const { error } = await runAuthRequest(() => supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: redirectUrl('/reset-password') }));
+    const path = inviteToken ? `/reset-password?invite=${encodeURIComponent(inviteToken)}` : '/reset-password';
+    const { error } = await runAuthRequest(() => supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: redirectUrl(path) }));
     throwIfAuthError(error);
+  }, []);
+  const verifyEmailConfirmation = useCallback(async () => {
+    if (!supabase) return unavailable();
+    const { data, error } = await runAuthRequest(() => supabase.auth.getUser());
+    throwIfAuthError(error);
+    return Boolean(data.user?.email_confirmed_at || data.user?.confirmed_at);
   }, []);
   const updatePassword = useCallback(async (password) => {
     if (!supabase) return unavailable();
@@ -127,7 +134,7 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   }, []);
 
-  return createElement(AuthContext.Provider, { value: { session, user: session?.user || null, loading, error, configured: Boolean(supabase), signUp, signInWithPassword, signInWithMagicLink, signInWithGoogle, requestPasswordReset, updatePassword, resendConfirmation, signOut } }, children);
+  return createElement(AuthContext.Provider, { value: { session, user: session?.user || null, loading, error, configured: Boolean(supabase), signUp, signInWithPassword, signInWithMagicLink, signInWithGoogle, requestPasswordReset, verifyEmailConfirmation, updatePassword, resendConfirmation, signOut } }, children);
 }
 
 export const useAuth = () => useContext(AuthContext);
