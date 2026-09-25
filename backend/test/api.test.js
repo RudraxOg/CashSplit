@@ -28,6 +28,12 @@ test('health endpoint reports a healthy API', async () => {
   assert.ok(body.persistence);
 });
 
+test('scheduled jobs reject requests without the deployment secret', async () => {
+  const { response, body } = await request('/api/internal/jobs', { headers: { authorization: 'Bearer invalid' } });
+  assert.equal(response.status, 401);
+  assert.equal(body.error, 'unauthorized');
+});
+
 test('monthly budget is saved per household and reflected in its summary', async () => {
   const created = await request('/api/groups', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Budget test home' }) });
   assert.equal(created.response.status, 201);

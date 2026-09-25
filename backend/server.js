@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('node:crypto');
 const cors = require('cors');
 const config = require('./src/config');
 const { requestContext, corsOptions } = require('./src/middleware/requestContext');
@@ -40,6 +41,19 @@ app.get('/api/health', async (req, res) => {
   const persistence = await supabaseHealth();
   const ok = persistence.mode === 'memory' || persistence.connected;
   return res.status(ok ? 200 : 503).json({ ok, environment: config.NODE_ENV, persistence });
+});
+// Vercel's scheduled GET invokes this route. Keep it outside user auth, but
+// require the deployment-only secret before touching scheduled work.
+app.get('/api/internal/jobs', async (req, res, next) => {
+  const secret = process.env.CRON_SECRET;
+  const supplied = req.get('authorization') || '';
+  const expected = `Bearer ${secret}`;
+  const suppliedBytes = Buffer.from(supplied);
+  const expectedBytes = Buffer.from(expected);
+  if (!secret || suppliedBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(suppliedBytes, expectedBytes)) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  try { return res.json(await require('./scripts/run-jobs').runJobs()); } catch (error) { return next(error); }
 });
 // Public onboarding signup; visitors can join before creating an account.
 app.use('/api/waitlist', waitlistRoutes);

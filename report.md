@@ -13,7 +13,7 @@ The six pending Supabase migrations were applied to the linked CashSplit project
 
 | Check | Result |
 |---|---|
-| `npm test` | Passed: 32 backend tests and 5 frontend tests (2026-09-25) |
+| `npm test` | Passed: 33 backend tests and 5 frontend tests (2026-09-25) |
 | `npm run build` | Passed |
 | Production chunking | Passed: route chunks emitted; no chunk exceeds Vite's 500 kB warning threshold |
 | Largest observed app/vendor chunks | App entry about 370 kB; Recharts about 350 kB |
@@ -179,6 +179,7 @@ The database migrations are **deployed to the linked CashSplit project**. A foll
 - Home now lets a household member edit the monthly INR budget. The value is saved per group; the budget card counts only expenses dated in the current month. The applied Supabase budget migration added `groups.monthly_budget_minor`; memory mode also supports editing. Add Expense now shows **None** as the default repeat option, which creates a one-time expense.
 - Invite links now use the deployed `PUBLIC_APP_URL` or the trusted app origin instead of always using the first CORS origin. A localhost link is labeled as local-only, pending invites can be regenerated, signup/sign-in keeps the invite token, and accepting a link switches to the newly joined group. The public Vercel URL is configured; the Supabase Auth redirect allowlist still needs confirmation for email and OAuth callbacks. Email delivery remains a separate SMTP setup.
 - The Chores page now plans today's or future assignments from a seven-day strip or date picker and shows earlier assignments per roommate. Supabase chore responses now include the assignee name and derive overdue/upcoming state from the due date. The existing chores table supports this without a migration.
+- Vercel now invokes the existing recurring expense and notification worker through a `CRON_SECRET`-protected daily route. Scheduled work is invoked by Vercel rather than depending on a persistent Express process.
 
 ### Missing or partial features
 

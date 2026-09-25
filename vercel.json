@@ -8,6 +8,7 @@
     },
     "backend": { "root": "backend/", "framework": "express" }
   },
+  "crons": [{ "path": "/api/internal/jobs", "schedule": "0 0 * * *" }],
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
