@@ -32,7 +32,7 @@ function nextRecurrenceDate(value, rule) {
 function present(chore) {
   const dueDate = chore.dueDate || dateFromLegacy(chore.when);
   const offset = Math.round((new Date(`${dueDate}T00:00:00Z`) - new Date(`${today()}T00:00:00Z`)) / 86400000);
-  return { ...chore, dueDate, recurrenceRule: chore.recurrenceRule || null, status: deriveStatus(dueDate, chore.status), when: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : dueDate };
+  return { ...chore, dueDate, startTime: chore.startTime || null, durationMinutes: chore.durationMinutes || null, recurrenceRule: chore.recurrenceRule || null, status: deriveStatus(dueDate, chore.status), when: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : dueDate };
 }
 function presentSupabase(row) {
   const dueDate = row.due_date;
@@ -41,6 +41,8 @@ function presentSupabase(row) {
     assignedTo: row.profiles?.name || row.assigned_to,
     assignedToId: row.assigned_to,
     dueDate,
+    startTime: row.start_time?.slice(0, 5) || null,
+    durationMinutes: row.duration_minutes || null,
     recurrenceRule: row.recurrence_rule,
     status: deriveStatus(dueDate, row.status),
     when: dueDate === today() ? 'Today' : dueDate,
@@ -59,7 +61,9 @@ router.post('/', async (req, res, next) => {
   if (repository.enabled()) {
     try { const body = parseBody(req.body || {}, choreSchema); const dueDate = body.dueDate || dateFromLegacy(body.when || 'Today'); const row = await repository.createChore({ ...body, dueDate }, req.user.id); return res.status(201).json(presentSupabase(row)); } catch (error) { return next(error); }
   }
-  const { name, assignedTo, when, dueDate: suppliedDueDate, recurrenceRule } = parseBody(req.body || {}, choreSchema);
+  let parsed;
+  try { parsed = parseBody(req.body || {}, choreSchema); } catch (error) { return next(error); }
+  const { name, assignedTo, when, dueDate: suppliedDueDate, recurrenceRule, startTime, durationMinutes } = parsed;
   const dueDate = suppliedDueDate || dateFromLegacy(when || 'Today');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || Number.isNaN(Date.parse(`${dueDate}T00:00:00Z`))) return res.status(400).json({ error: 'dueDate must be a valid ISO date' });
   if (recurrenceRule && !/^FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)/.test(recurrenceRule)) return res.status(400).json({ error: 'recurrenceRule must start with a supported FREQ' });
@@ -73,6 +77,8 @@ router.post('/', async (req, res, next) => {
     name: nameResult.value,
     assignedTo: assignedToResult.value,
     dueDate,
+    startTime: startTime || null,
+    durationMinutes: durationMinutes || null,
     recurrenceRule: recurrenceRule || null,
     when: when || 'Today',
     status: deriveStatus(dueDate),
@@ -100,13 +106,14 @@ router.put('/:id', async (req, res, next) => {
   const id = integerId(req.params.id);
   const existing = id && store.getChores().find((chore) => chore.id === id);
   if (!existing) return res.status(404).json({ error: 'chore not found' });
-  const body = parseBody(req.body || {}, choreSchema);
+  let body;
+  try { body = parseBody(req.body || {}, choreSchema); } catch (error) { return next(error); }
   const dueDate = body.dueDate || dateFromLegacy(body.when || 'Today');
   const assignedToResult = memberName(body.assignedTo, store.MEMBERS);
   const nameResult = text(body.name, 'name');
   if (nameResult.error) return res.status(400).json({ error: nameResult.error });
   if (assignedToResult.error) return res.status(400).json({ error: assignedToResult.error });
-  const updated = store.updateChore(id, { name: nameResult.value, assignedTo: assignedToResult.value, dueDate, recurrenceRule: body.recurrenceRule || null });
+  const updated = store.updateChore(id, { name: nameResult.value, assignedTo: assignedToResult.value, dueDate, startTime: body.startTime || null, durationMinutes: body.durationMinutes || null, recurrenceRule: body.recurrenceRule || null });
   return res.json(present(updated));
 });
 

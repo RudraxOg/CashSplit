@@ -190,10 +190,17 @@ export function ChoreForm({ members, initialDate, onSubmit, onClose }) {
   const [assignedTo, setAssignedTo] = useState(members[0]?.name || '');
   const [dueDate, setDueDate] = useState(() => initialDate || localISODate());
   const [recurrenceRule, setRecurrenceRule] = useState('');
+  const [timed, setTimed] = useState(false);
+  const [startTime, setStartTime] = useState('09:00');
+  const [durationMinutes, setDurationMinutes] = useState('30');
+  const [timeError, setTimeError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const submit = async () => {
+    const error = choreScheduleError(timed, startTime, durationMinutes);
+    if (error) { setTimeError(error); return; }
+    setTimeError('');
     setSubmitting(true);
-    try { if (await onSubmit({ name, assignedTo, dueDate, recurrenceRule: recurrenceRule || null })) onClose(); } finally { setSubmitting(false); }
+    try { if (await onSubmit({ name, assignedTo, dueDate, startTime: timed ? startTime : null, durationMinutes: timed ? Number(durationMinutes) : null, recurrenceRule: recurrenceRule || null })) onClose(); } finally { setSubmitting(false); }
   };
 
   return (
@@ -205,6 +212,7 @@ export function ChoreForm({ members, initialDate, onSubmit, onClose }) {
         </select>
       </Field>
       <Field label="Due date"><input type="date" value={dueDate} min={localISODate()} onChange={(e) => setDueDate(e.target.value)} className="rm-input w-full" /></Field>
+      <ChoreScheduleFields {...{ timed, setTimed, startTime, setStartTime, durationMinutes, setDurationMinutes, timeError }} />
       <Field label="Repeat (optional)"><select value={recurrenceRule} onChange={(e) => setRecurrenceRule(e.target.value)} className="rm-input w-full"><option value="">Does not repeat</option><option value="FREQ=DAILY">Every day</option><option value="FREQ=WEEKLY">Every week</option><option value="FREQ=MONTHLY">Every month</option></select></Field>
       <button
         disabled={!name || submitting}
@@ -215,6 +223,24 @@ export function ChoreForm({ members, initialDate, onSubmit, onClose }) {
       </button>
     </div>
   );
+}
+
+function choreScheduleError(timed, startTime, durationMinutes) {
+  if (!timed) return '';
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) return 'Choose a start time.';
+  const duration = Number(durationMinutes);
+  if (!Number.isInteger(duration) || duration < 1 || duration > 720) return 'Duration must be from 1 minute to 12 hours.';
+  const [hours, minutes] = startTime.split(':').map(Number);
+  if (hours * 60 + minutes + duration > 1440) return 'The chore must finish by midnight. Choose an earlier time or shorter duration.';
+  return '';
+}
+
+function ChoreScheduleFields({ timed, setTimed, startTime, setStartTime, durationMinutes, setDurationMinutes, timeError }) {
+  return <div className="space-y-3">
+    <Field label="Time of day"><select className="rm-input w-full" value={timed ? 'timed' : 'anytime'} onChange={(event) => setTimed(event.target.value === 'timed')}><option value="anytime">Anytime that day</option><option value="timed">Set a start time and duration</option></select></Field>
+    {timed && <div className="grid grid-cols-2 gap-3"><Field label="Start time"><input aria-label="Start time" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="rm-input w-full" required /></Field><Field label="Duration (minutes)"><input aria-label="Duration (minutes)" type="number" inputMode="numeric" min="1" max="720" step="1" value={durationMinutes} onChange={(event) => setDurationMinutes(event.target.value)} className="rm-input w-full" required /></Field></div>}
+    {timeError && <p role="alert" className="text-sm" style={{ color: 'var(--danger-text)' }}>{timeError}</p>}
+  </div>;
 }
 
 export function PurchaseForm({ onSubmit, onClose }) {
@@ -347,9 +373,13 @@ export function EditChoreForm({ chore, members, onSubmit, onClose }) {
   const [assignedTo, setAssignedTo] = useState(initialMember?.name || members[0]?.name || '');
   const [dueDate, setDueDate] = useState(chore.dueDate || new Date().toISOString().slice(0, 10));
   const [recurrenceRule, setRecurrenceRule] = useState(chore.recurrenceRule || '');
+  const [timed, setTimed] = useState(Boolean(chore.startTime));
+  const [startTime, setStartTime] = useState(chore.startTime || '09:00');
+  const [durationMinutes, setDurationMinutes] = useState(String(chore.durationMinutes || 30));
+  const [timeError, setTimeError] = useState('');
   const [busy, setBusy] = useState(false);
-  const save = async () => { if (!name.trim()) return; setBusy(true); try { if (await onSubmit({ name: name.trim(), assignedTo, dueDate, recurrenceRule: recurrenceRule || null })) onClose(); } finally { setBusy(false); } };
-  return <div className="space-y-3"><Field label="Chore name"><input className="rm-input w-full" value={name} onChange={(e) => setName(e.target.value)} /></Field><Field label="Assign to"><select className="rm-input w-full" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>{members.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field><Field label="Due date"><input className="rm-input w-full" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></Field><Field label="Repeat"><select className="rm-input w-full" value={recurrenceRule} onChange={(e) => setRecurrenceRule(e.target.value)}><option value="">Does not repeat</option><option value="FREQ=DAILY">Every day</option><option value="FREQ=WEEKLY">Every week</option><option value="FREQ=MONTHLY">Every month</option></select></Field><button disabled={busy} onClick={save} className="rm-btn rm-btn-primary w-full py-3">{busy ? 'Saving…' : 'Save changes'}</button></div>;
+  const save = async () => { if (!name.trim()) return; const error = choreScheduleError(timed, startTime, durationMinutes); if (error) { setTimeError(error); return; } setTimeError(''); setBusy(true); try { if (await onSubmit({ name: name.trim(), assignedTo, dueDate, startTime: timed ? startTime : null, durationMinutes: timed ? Number(durationMinutes) : null, recurrenceRule: recurrenceRule || null })) onClose(); } finally { setBusy(false); } };
+  return <div className="space-y-3"><Field label="Chore name"><input className="rm-input w-full" value={name} onChange={(e) => setName(e.target.value)} /></Field><Field label="Assign to"><select className="rm-input w-full" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>{members.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field><Field label="Due date"><input className="rm-input w-full" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></Field><ChoreScheduleFields {...{ timed, setTimed, startTime, setStartTime, durationMinutes, setDurationMinutes, timeError }} /><Field label="Repeat"><select className="rm-input w-full" value={recurrenceRule} onChange={(e) => setRecurrenceRule(e.target.value)}><option value="">Does not repeat</option><option value="FREQ=DAILY">Every day</option><option value="FREQ=WEEKLY">Every week</option><option value="FREQ=MONTHLY">Every month</option></select></Field><button disabled={busy} onClick={save} className="rm-btn rm-btn-primary w-full py-3">{busy ? 'Saving…' : 'Save changes'}</button></div>;
 }
 
 export function EditShoppingForm({ item, onSubmit, onClose }) {

@@ -150,6 +150,24 @@ test('chores use an ISO due date and derive their status server-side', async () 
   assert.equal(body.recurrenceRule, 'FREQ=WEEKLY');
 });
 
+test('timed chores can be edited to anytime and reject invalid slots', async () => {
+  const payload = { name: 'Timed vacuuming', assignedTo: 'Krishna', dueDate: '2099-01-01', startTime: '09:15', durationMinutes: 45 };
+  const created = await request('/api/chores', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.startTime, '09:15');
+  assert.equal(created.body.durationMinutes, 45);
+  const listed = await request('/api/chores?groupId=g1');
+  assert.equal(listed.body.find((chore) => chore.id === created.body.id).startTime, '09:15');
+  const edited = await request(`/api/chores/${created.body.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, startTime: null, durationMinutes: null }) });
+  assert.equal(edited.response.status, 200);
+  assert.equal(edited.body.startTime, null);
+  assert.equal(edited.body.durationMinutes, null);
+  for (const invalid of [{ ...payload, durationMinutes: null }, { ...payload, startTime: '23:45', durationMinutes: 30 }]) {
+    const result = await request('/api/chores', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(invalid) });
+    assert.equal(result.response.status, 400);
+  }
+});
+
 test('memory groups isolate income and support income editing and deletion', async () => {
   const createdGroup = await request('/api/groups', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Isolated test group' }) });
   assert.equal(createdGroup.response.status, 201);
@@ -192,10 +210,10 @@ test('memory shopping items support editing and remain group scoped', async () =
 });
 
 test('completing a recurring chore schedules its next occurrence', async () => {
-  const created = await request('/api/chores', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ groupId: 'g1', name: 'Recurring test chore', assignedTo: 'Krishna', dueDate: '2026-09-24', recurrenceRule: 'FREQ=WEEKLY' }) });
+  const created = await request('/api/chores', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ groupId: 'g1', name: 'Recurring test chore', assignedTo: 'Krishna', dueDate: '2026-09-24', startTime: '08:30', durationMinutes: 30, recurrenceRule: 'FREQ=WEEKLY' }) });
   assert.equal(created.response.status, 201);
   const toggled = await request(`/api/chores/${created.body.id}/toggle?groupId=g1`, { method: 'PATCH' });
   assert.equal(toggled.body.status, 'completed');
   const chores = await request('/api/chores?groupId=g1');
-  assert.equal(chores.body.some((item) => item.name === 'Recurring test chore' && item.id !== created.body.id && item.dueDate === '2026-10-01'), true);
+  assert.equal(chores.body.some((item) => item.name === 'Recurring test chore' && item.id !== created.body.id && item.dueDate === '2026-10-01' && item.startTime === '08:30' && item.durationMinutes === 30), true);
 });

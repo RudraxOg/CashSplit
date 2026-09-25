@@ -72,10 +72,20 @@ const choreSchema = z.object({
   name: z.string().trim().min(1).max(120),
   assignedTo: z.string().trim().min(1).max(80),
   dueDate: z.string().optional(),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+  durationMinutes: z.number().int().min(1).max(720).nullable().optional(),
   recurrenceRule: z.string().max(200).nullable().optional(),
   when: z.string().optional(),
   status: z.string().optional(),
-}).passthrough();
+}).passthrough().superRefine((data, context) => {
+  const hasStart = data.startTime != null;
+  const hasDuration = data.durationMinutes != null;
+  if (hasStart !== hasDuration) context.addIssue({ code: 'custom', path: ['startTime'], message: 'start time and duration must be set together' });
+  if (hasStart && hasDuration) {
+    const [hours, minutes] = data.startTime.split(':').map(Number);
+    if (hours * 60 + minutes + data.durationMinutes > 1440) context.addIssue({ code: 'custom', path: ['durationMinutes'], message: 'chore must end by midnight' });
+  }
+});
 const settlementSchema = z.object({
   currency: z.enum(require('../services/currencies').CURRENCIES).default('INR'),
   groupId: z.string().min(1).optional(),

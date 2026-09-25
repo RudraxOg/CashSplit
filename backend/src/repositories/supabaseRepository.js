@@ -203,7 +203,7 @@ async function createChore(data, actorId) {
   const assignedMembership = await query(supabase.from('group_members').select('profiles(id,name)').eq('group_id', groupId), 'assigned member lookup failed');
   const assigned = assignedMembership.map((item) => item.profiles).find((profile) => profile?.name?.toLowerCase() === String(data.assignedTo).toLowerCase());
   if (!assigned) { const error = new Error('member must be a household member'); error.statusCode = 400; throw error; }
-  return query(supabase.from('chores').insert({ group_id: groupId, name: data.name, assigned_to: assigned.id, due_date: data.dueDate, recurrence_rule: data.recurrenceRule || null }).select('*, profiles:assigned_to(id,name)').single(), 'chore creation failed');
+  return query(supabase.from('chores').insert({ group_id: groupId, name: data.name, assigned_to: assigned.id, due_date: data.dueDate, start_time: data.startTime || null, duration_minutes: data.durationMinutes || null, recurrence_rule: data.recurrenceRule || null }).select('*, profiles:assigned_to(id,name)').single(), 'chore creation failed');
 }
 
 async function toggleChore(id, actorId) {
@@ -211,11 +211,11 @@ async function toggleChore(id, actorId) {
   if (!row) { const error = new Error('chore not found'); error.statusCode = 404; throw error; }
   await assertMember(row.group_id, actorId);
   const completed = row.status !== 'completed';
-  const updated = await query(supabase.from('chores').update({ status: completed ? 'completed' : 'pending', completed_at: completed ? new Date().toISOString() : null }).eq('id', id).select('*').single(), 'chore update failed');
+  const updated = await query(supabase.from('chores').update({ status: completed ? 'completed' : 'pending', completed_at: completed ? new Date().toISOString() : null }).eq('id', id).select('*, profiles:assigned_to(id,name)').single(), 'chore update failed');
   const nextDueDate = completed ? nextRecurrenceDate(row.due_date, row.recurrence_rule) : null;
   if (nextDueDate) {
     const existingNext = await query(supabase.from('chores').select('id').eq('group_id', row.group_id).eq('name', row.name).eq('assigned_to', row.assigned_to).eq('due_date', nextDueDate).is('deleted_at', null).maybeSingle(), 'recurring chore lookup failed');
-    if (!existingNext) await query(supabase.from('chores').insert({ group_id: row.group_id, name: row.name, assigned_to: row.assigned_to, due_date: nextDueDate, recurrence_rule: row.recurrence_rule, status: 'pending' }), 'recurring chore creation failed');
+    if (!existingNext) await query(supabase.from('chores').insert({ group_id: row.group_id, name: row.name, assigned_to: row.assigned_to, due_date: nextDueDate, start_time: row.start_time, duration_minutes: row.duration_minutes, recurrence_rule: row.recurrence_rule, status: 'pending' }), 'recurring chore creation failed');
   }
   return updated;
 }
@@ -227,7 +227,7 @@ async function updateChore(id, data, actorId) {
   const assignedMembership = await query(supabase.from('group_members').select('profiles(id,name)').eq('group_id', row.group_id), 'assigned member lookup failed');
   const assigned = assignedMembership.map((item) => item.profiles).find((profile) => profile?.name?.toLowerCase() === String(data.assignedTo).toLowerCase());
   if (!assigned) { const error = new Error('member must be a household member'); error.statusCode = 400; throw error; }
-  return query(supabase.from('chores').update({ name: data.name, assigned_to: assigned.id, due_date: data.dueDate, recurrence_rule: data.recurrenceRule || null }).eq('id', id).select('*, profiles:assigned_to(id,name)').single(), 'chore update failed');
+  return query(supabase.from('chores').update({ name: data.name, assigned_to: assigned.id, due_date: data.dueDate, start_time: data.startTime || null, duration_minutes: data.durationMinutes || null, recurrence_rule: data.recurrenceRule || null }).eq('id', id).select('*, profiles:assigned_to(id,name)').single(), 'chore update failed');
 }
 
 async function deleteChore(id, actorId) {

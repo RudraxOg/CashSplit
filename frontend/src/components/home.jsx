@@ -8,6 +8,7 @@ import {
   Inbox, CheckCircle2, ArrowLeftRight, Pencil,
 } from 'lucide-react';
 import { C, CATEGORY_COLORS, CHORE_COLOR_CYCLE, PRIORITY_META, ACTIVITY_COLOR, inr } from '../lib/constants';
+import { choreTimeRange } from '../lib/dates';
 import { Avatar, Badge, Delta, ProgressBar, EmptyState, SectionCard } from './common';
 import { Modal } from './common';
 import { PurchaseExpenseForm } from './forms';
@@ -205,7 +206,7 @@ function statusMeta(status) {
   return { label: 'Upcoming', bg: 'var(--neutral-soft)', color: C.textSec, icon: Clock };
 }
 
-export function ChoreRow({ chore, members, onToggle, showWhen }) {
+export function ChoreRow({ chore, members, onToggle, showWhen, showTime = true }) {
   const Icon = choreIcon(chore.name);
   const meta = statusMeta(chore.status);
   const idx = chore.id % CHORE_COLOR_CYCLE.length;
@@ -218,7 +219,7 @@ export function ChoreRow({ chore, members, onToggle, showWhen }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{chore.name}</p>
         <p className="text-xs rm-text-secondary truncate">
-          Assigned to {member?.you ? 'You' : chore.assignedTo}{showWhen ? ` · ${chore.when === 'Today' || chore.when === 'Tomorrow' ? chore.when : chore.dueDate}` : ''}
+          Assigned to {member?.you ? 'You' : chore.assignedTo}{showWhen ? ` · ${chore.when === 'Today' || chore.when === 'Tomorrow' ? chore.when : chore.dueDate}` : ''}{showTime && chore.startTime ? ` · ${choreTimeRange(chore.startTime, chore.durationMinutes)}` : ''}
         </p>
       </div>
       <button

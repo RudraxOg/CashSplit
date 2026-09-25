@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, History, ListChecks, Pencil, Plus, X } from 'lucide-react';
 import { C } from '../lib/constants';
-import { addISODate, localISODate } from '../lib/dates';
+import { addISODate, choreTimeLabel, choreTimeRange, localISODate } from '../lib/dates';
 import { SectionCard, EmptyState } from '../components/common';
 import { ChoreRow } from '../components/home';
 
@@ -19,6 +19,8 @@ export default function ChoresPage({ chores, members, onToggle, onDelete, onEdit
   const historyMember = members.find((member) => String(member.id) === historyMemberId) || members[0];
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addISODate(weekStart, index)), [weekStart]);
   const selectedChores = useMemo(() => chores.filter((chore) => chore.dueDate === selectedDate), [chores, selectedDate]);
+  const timedChores = useMemo(() => selectedChores.filter((chore) => chore.startTime).sort((a, b) => a.startTime.localeCompare(b.startTime) || a.name.localeCompare(b.name)), [selectedChores]);
+  const anytimeChores = useMemo(() => selectedChores.filter((chore) => !chore.startTime), [selectedChores]);
   const previousChores = useMemo(() => chores
     .filter((chore) => chore.dueDate && chore.dueDate < today && historyMember && assignedToMember(chore, historyMember))
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate)), [chores, historyMember, today]);
@@ -64,9 +66,22 @@ export default function ChoresPage({ chores, members, onToggle, onDelete, onEdit
 
         <div className="mt-6 border-t pt-5" style={{ borderColor: C.border }}>
           <div className="flex flex-wrap justify-between items-center gap-2 mb-2"><h3 className="font-semibold" style={{ color: C.text }}>{selectedTitle}</h3><span className="text-xs rm-text-secondary">{selectedChores.length} assigned</span></div>
-          {selectedChores.length ? <div className="divide-y" style={{ borderColor: C.border }}>
-            {selectedChores.map((chore) => <ChoreRow key={chore.id} chore={chore} members={members} onToggle={onToggle} showWhen={false} />)}
-          </div> : <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: 'var(--selected-surface)', color: C.textSec }}><Clock3 size={18} className="shrink-0" /><p className="text-sm">No chores planned for this day.</p></div>}
+          {timedChores.length > 0 && <div className="mt-4" aria-label="Timed chores">
+            <p className="text-xs font-semibold uppercase tracking-wider rm-text-secondary mb-2">By time</p>
+            <div className="border-l-2 ml-[3.4rem] space-y-2" style={{ borderColor: C.border }}>
+              {timedChores.map((chore) => <div key={chore.id} className="relative pl-5 py-1">
+                <span className="absolute -left-[3.55rem] top-5 w-12 text-right text-xs font-semibold" style={{ color: C.textSec }}>{choreTimeLabel(chore.startTime)}</span>
+                <span className="absolute -left-[0.43rem] top-[1.3rem] h-3 w-3 rounded-full border-[3px]" style={{ background: 'var(--surface)', borderColor: C.accent }} />
+                <div className="rounded-xl border px-3 sm:px-4" style={{ borderColor: C.border, background: 'var(--surface)' }}>
+                  <p className="text-xs font-semibold pt-3" style={{ color: C.accentDark }}>{choreTimeRange(chore.startTime, chore.durationMinutes)} · {chore.durationMinutes} min</p>
+                  <ChoreRow chore={chore} members={members} onToggle={onToggle} showWhen={false} showTime={false} />
+                  <button type="button" onClick={() => onEdit(chore)} className="text-xs rm-text-secondary min-h-10 flex items-center gap-1 cursor-pointer"><Pencil size={12} /> Edit time or chore</button>
+                </div>
+              </div>)}
+            </div>
+          </div>}
+          {anytimeChores.length > 0 && <div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wider rm-text-secondary mb-1">Anytime</p><div className="divide-y" style={{ borderColor: C.border }}>{anytimeChores.map((chore) => <ChoreRow key={chore.id} chore={chore} members={members} onToggle={onToggle} showWhen={false} />)}</div></div>}
+          {!selectedChores.length && <div className="rounded-xl p-4 flex items-center gap-3 mt-3" style={{ background: 'var(--selected-surface)', color: C.textSec }}><Clock3 size={18} className="shrink-0" /><p className="text-sm">No chores planned for this day.</p></div>}
           {!selectedIsPast && <button type="button" onClick={() => onPlan(selectedDate)} className="text-sm font-semibold min-h-11 mt-2 flex items-center gap-1.5 cursor-pointer" style={{ color: C.accentDark }}><Plus size={15} /> Add chore for this day</button>}
         </div>
       </section>
@@ -79,7 +94,7 @@ export default function ChoresPage({ chores, members, onToggle, onDelete, onEdit
         </div>
         {previousChores.length ? <div className="divide-y" style={{ borderColor: C.border }}>
           {previousChores.map((chore) => <div key={chore.id} className="flex flex-wrap items-center justify-between gap-x-4 py-2">
-            <div className="min-w-0"><p className="text-sm font-medium" style={{ color: C.text }}>{chore.name}</p><p className="text-xs rm-text-secondary">{dateLabel(chore.dueDate, { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+            <div className="min-w-0"><p className="text-sm font-medium" style={{ color: C.text }}>{chore.name}</p><p className="text-xs rm-text-secondary">{dateLabel(chore.dueDate, { day: 'numeric', month: 'short', year: 'numeric' })}{chore.startTime ? ` · ${choreTimeRange(chore.startTime, chore.durationMinutes)}` : ''}</p></div>
             <span className="text-xs font-semibold" style={{ color: chore.status === 'completed' ? C.income : C.expense }}>{chore.status === 'completed' ? 'Completed' : 'Overdue'}</span>
           </div>)}
         </div> : <p className="text-sm rm-text-secondary py-3">No earlier chores were assigned to {historyMember?.you ? 'you' : historyMember?.name || 'this member'}.</p>}
