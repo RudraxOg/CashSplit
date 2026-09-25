@@ -1,3 +1,4 @@
+
 const crypto = require('node:crypto');
 const config = require('../config');
 
@@ -13,12 +14,30 @@ function requestContext(req, res, next) {
   next();
 }
 
-function corsOptions() {
+function corsOptions(request) {
+  const allowedOrigins = new Set(config.CORS_ORIGINS.map((origin) => origin.replace(/\/$/, '')));
+  const isLocalOrigin = (origin) => {
+    try {
+      const url = new URL(origin);
+      return ['localhost', '127.0.0.1', '::1'].includes(url.hostname) && url.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  };
+
   return {
     origin(origin, callback) {
-      if (!origin || (config.NODE_ENV !== 'production' && !config.CORS_ORIGINS.length) || config.CORS_ORIGINS.includes(origin)) return callback(null, true);
+      const normalizedOrigin = origin?.replace(/\/$/, '');
+      const developmentOrigin = config.NODE_ENV !== 'production' && normalizedOrigin && isLocalOrigin(normalizedOrigin);
+      let sameHost = false;
+      try { sameHost = Boolean(request && normalizedOrigin && new URL(normalizedOrigin).host === request.get('host')); } catch { /* invalid origin */ }
+      if (!origin || sameHost || developmentOrigin || allowedOrigins.has(normalizedOrigin)) return callback(null, true);
       return callback(new Error('CORS origin is not allowed'));
     },
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id'],
+    optionsSuccessStatus: 204,
   };
 }
 

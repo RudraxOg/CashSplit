@@ -17,28 +17,42 @@ const reportsRoutes = require('./src/routes/reports.routes');
 const groupsRoutes = require('./src/routes/groups.routes');
 const settlementsRoutes = require('./src/routes/settlements.routes');
 const usersRoutes = require('./src/routes/users.routes');
+const waitlistRoutes = require('./src/routes/waitlist.routes');
+const accountRoutes = require('./src/routes/account.routes');
+const invitesRoutes = require('./src/routes/invites.routes');
 
 const app = express();
 const PORT = config.PORT;
 const HOST = config.HOST;
 
-app.use(cors(corsOptions()));
+app.use((req, res, next) => cors(corsOptions(req))(req, res, next));
 app.use(express.json({ limit: '100kb' }));
 app.use(requestContext);
-app.use(idempotency);
 
 app.use((req, res, next) => {
   if (req.headers['content-type'] && req.is('json') === false && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
-    return res.status(415).json({ error: 'content-type must be application/json' });
+    if (!/^\/api\/expenses\/[^/]+\/receipt$/.test(req.path)) return res.status(415).json({ error: 'content-type must be application/json' });
   }
   next();
 });
 
-app.get('/api/health', async (req, res) => res.json({ ok: true, environment: config.NODE_ENV, persistence: await supabaseHealth() }));
+app.get('/api/health', async (req, res) => {
+  const persistence = await supabaseHealth();
+  const ok = persistence.mode === 'memory' || persistence.connected;
+  return res.status(ok ? 200 : 503).json({ ok, environment: config.NODE_ENV, persistence });
+});
+// Public onboarding signup; visitors can join before creating an account.
+app.use('/api/waitlist', waitlistRoutes);
+// Invite previews are public by token; acceptance/decline applies its own auth guard.
+app.use('/api/invites', invitesRoutes);
 app.use('/api', requireAuth);
+app.use('/api/expenses', require('./src/routes/receipts.routes'));
+app.use('/api', idempotency);
+app.use('/api/account', accountRoutes);
 
 app.use('/api/members', membersRoutes);
 app.use('/api/expenses', expensesRoutes);
+app.use('/api/expense-series', require('./src/routes/expenseSeries.routes'));
 app.use('/api/incomes', incomesRoutes);
 app.use('/api/chores', choresRoutes);
 app.use('/api/shopping', shoppingRoutes);
@@ -57,17 +71,32 @@ app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'request body must contain valid JSON' });
   }
-  console.error(JSON.stringify({ requestId: req.requestId, error: err.message, stack: config.NODE_ENV === 'development' ? err.stack : undefined }));
+  console.error(JSON.stringify({
+    requestId: req.requestId,
+    error: err.message,
+    code: err.cause?.code || err.code,
+    details: err.cause?.details,
+    hint: err.cause?.hint,
+    stack: config.NODE_ENV === 'development' ? err.stack : undefined,
+  }));
   const status = err.message === 'CORS origin is not allowed' ? 403 : (err.statusCode || 500);
-  res.status(status).json({ error: status === 500 ? 'internal server error' : err.message, requestId: req.requestId });
+  res.status(status).json({
+    error: status === 500 && config.NODE_ENV !== 'development' ? 'internal server error' : err.message,
+    requestId: req.requestId,
+  });
 });
 
 if (require.main === module) {
+  const runRecurring = () => require('./src/services/expenseSeries').runDue().catch((error) => console.error('Recurring expenses:', error.message));
+  const jobTimer = setInterval(runRecurring, 60000);
+  jobTimer.unref();
+  runRecurring();
   const server = app.listen(PORT, HOST, () => {
     console.log(`RoomMate API listening on http://localhost:${PORT}`);
   });
 
   const shutdown = (signal) => {
+    clearInterval(jobTimer);
     console.log(`${signal} received, shutting down RoomMate API`);
     server.close(() => process.exit(0));
   };

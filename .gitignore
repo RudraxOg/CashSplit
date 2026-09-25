@@ -12,3 +12,9 @@ frontend/.env
 *.log
 .DS_Store
 .vscode/
+.vercel/
+frontend/test-results/
+frontend/playwright-report/
+supabase/.temp/
+.vercel
+.env*

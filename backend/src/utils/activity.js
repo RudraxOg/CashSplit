@@ -5,9 +5,10 @@ const store = require('../data/store');
  * `pushActivity` helper, now living server-side so every client sees the
  * same feed instead of each browser tab keeping its own copy.
  */
-function pushActivity({ kind, text, detail }) {
+function pushActivity({ groupId = 'g1', kind, text, detail }) {
   return store.addActivity({
     id: store.genId(),
+    groupId,
     kind,
     text,
     detail,

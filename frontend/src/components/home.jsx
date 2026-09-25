@@ -3,33 +3,51 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip,
 } from 'recharts';
 import {
-  Wallet, CreditCard, PiggyBank, Target, ArrowRight, ChevronDown, Check, X,
+  Wallet, CreditCard, PiggyBank, ArrowRight, ChevronDown, Check, X,
   ChefHat, UtensilsCrossed, Sparkles, Trash2, ShoppingCart, ListChecks, Clock,
-  Inbox, CheckCircle2, ArrowLeftRight,
+  Inbox, CheckCircle2, ArrowLeftRight, Pencil,
 } from 'lucide-react';
 import { C, CATEGORY_COLORS, CHORE_COLOR_CYCLE, PRIORITY_META, ACTIVITY_COLOR, inr } from '../lib/constants';
 import { Avatar, Badge, Delta, ProgressBar, EmptyState, SectionCard } from './common';
+import { Modal } from './common';
+import { PurchaseExpenseForm } from './forms';
 
 /* ---------- summary cards ---------- */
-export function SummaryCards({ totalIncome, totalExpenses, balance, budget, spentPct }) {
+export function SummaryCards({ totalIncome, totalExpenses, balance, budget, budgetSpent = 0, spentPct, onUpdateBudget }) {
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [budgetDraft, setBudgetDraft] = useState('');
+  const [budgetError, setBudgetError] = useState('');
+  const [savingBudget, setSavingBudget] = useState(false);
+  const saveBudget = async (event) => {
+    event.preventDefault();
+    const value = Number(budgetDraft);
+    if (!Number.isFinite(value) || value < 0.01 || value > 1_000_000_000 || Math.abs(Math.round(value * 100) - value * 100) > 1e-6) {
+      setBudgetError('Enter an amount above zero with at most two decimal places.');
+      return;
+    }
+    setBudgetError('');
+    setSavingBudget(true);
+    try { if (await onUpdateBudget(value)) setEditingBudget(false); }
+    finally { setSavingBudget(false); }
+  };
   return (
     <div className="grid mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
       <div className="rm-card rm-card-hover p-5">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-sm font-medium rm-text-secondary">Total Income</span>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#E6F5EF' }}>
+          <span className="text-sm font-medium rm-text-secondary">Household Income</span>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
             <Wallet size={16} color={C.income} />
           </div>
         </div>
         <p className="font-bold" style={{ fontSize: 28, color: C.text }}>{inr(totalIncome)}</p>
-        <p className="text-xs rm-text-secondary mt-1 mb-2">This Month</p>
+        <p className="text-xs rm-text-secondary mt-1 mb-2">Shared entries this month · personal income stays separate</p>
         <Delta value={12} />
       </div>
 
       <div className="rm-card rm-card-hover p-5">
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm font-medium rm-text-secondary">Total Expenses</span>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#FBEAEA' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--danger-soft)' }}>
             <CreditCard size={16} color={C.expense} />
           </div>
         </div>
@@ -41,7 +59,7 @@ export function SummaryCards({ totalIncome, totalExpenses, balance, budget, spen
       <div className="rm-card rm-card-hover p-5">
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm font-medium rm-text-secondary">Balance</span>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#E6F5EF' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
             <PiggyBank size={16} color={C.income} />
           </div>
         </div>
@@ -53,13 +71,13 @@ export function SummaryCards({ totalIncome, totalExpenses, balance, budget, spen
       <div className="rm-card rm-card-hover p-5">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium rm-text-secondary">Monthly Budget</span>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#EFECFD' }}>
-            <Target size={16} color={C.chores} />
-          </div>
+          <button type="button" aria-label="Edit monthly budget" onClick={() => { setBudgetDraft(String(budget)); setBudgetError(''); setEditingBudget(true); }} className="w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer" style={{ background: 'var(--purple-soft)' }}><Pencil size={17} color="var(--purple-text)" /></button>
         </div>
-        <p className="text-sm mb-1" style={{ color: C.text }}>
-          <span className="font-bold">{inr(totalExpenses)}</span> <span className="rm-text-secondary">of {inr(budget)}</span>
-        </p>
+        {editingBudget ? <form onSubmit={saveBudget} className="mb-2">
+          <label htmlFor="monthly-budget-input" className="text-xs rm-text-secondary block mb-1">Monthly budget (₹)</label>
+          <div className="flex gap-2"><input id="monthly-budget-input" autoFocus className="rm-input min-w-0" type="number" min="0.01" max="1000000000" step="0.01" value={budgetDraft} onChange={(event) => setBudgetDraft(event.target.value)} /><button type="submit" disabled={savingBudget} className="rm-btn rm-btn-primary px-3 text-xs disabled:opacity-50">Save</button><button type="button" onClick={() => setEditingBudget(false)} className="rm-btn rm-btn-ghost px-3 text-xs">Cancel</button></div>
+          {budgetError && <p role="alert" className="text-xs mt-1" style={{ color: 'var(--danger-text)' }}>{budgetError}</p>}
+        </form> : <p className="text-sm mb-1" style={{ color: C.text }}><span className="font-bold">{inr(budgetSpent)}</span> <span className="rm-text-secondary">of {inr(budget)}</span></p>}
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs rm-text-secondary">Spent</span>
           <span className="text-xs font-semibold" style={{ color: C.text }}>{spentPct}%</span>
@@ -181,10 +199,10 @@ function choreIcon(name) {
 }
 
 function statusMeta(status) {
-  if (status === 'completed') return { label: 'Completed', bg: '#E6F5EF', color: C.accentDark, icon: Check };
-  if (status === 'overdue') return { label: 'Overdue', bg: '#FBEAEA', color: C.expense, icon: Clock };
-  if (status === 'pending') return { label: 'Pending', bg: '#FCF1E1', color: '#B8791A', icon: Clock };
-  return { label: 'Upcoming', bg: '#F1F3F0', color: C.textSec, icon: Clock };
+  if (status === 'completed') return { label: 'Completed', bg: 'var(--accent-soft)', color: C.accentDark, icon: Check };
+  if (status === 'overdue') return { label: 'Overdue', bg: 'var(--danger-soft)', color: 'var(--danger-text)', icon: Clock };
+  if (status === 'pending') return { label: 'Pending', bg: 'var(--warning-soft)', color: 'var(--warning-text)', icon: Clock };
+  return { label: 'Upcoming', bg: 'var(--neutral-soft)', color: C.textSec, icon: Clock };
 }
 
 export function ChoreRow({ chore, members, onToggle, showWhen }) {
@@ -218,7 +236,7 @@ export function ChoreRow({ chore, members, onToggle, showWhen }) {
 export function TodaysChores({ chores, members, onToggle, setPage }) {
   const today = chores.filter((c) => c.when === 'Today');
   return (
-    <SectionCard title="Today's Chores" action={<span className="text-sm font-semibold cursor-pointer" style={{ color: C.accentDark }}>View Calendar</span>}>
+    <SectionCard title="Today's Chores" action={<button type="button" onClick={() => setPage('chores')} className="text-sm font-semibold cursor-pointer min-h-11 px-2" style={{ color: C.accentDark }}>View Calendar</button>}>
       {today.length === 0 ? (
         <EmptyState icon={ListChecks} title="No chores today" subtitle="Enjoy the free day, or plan ahead." />
       ) : (
@@ -236,16 +254,19 @@ export function TodaysChores({ chores, members, onToggle, setPage }) {
 /* ---------- activity feed ---------- */
 const ACTIVITY_ICON = { expense: ShoppingCart, chore: CheckCircle2, income: Wallet, settle: ArrowLeftRight };
 
-export function ActivityFeed({ activities }) {
+export function ActivityFeed({ activities, onViewAll }) {
   return (
-    <SectionCard title="Recent Activity" action={<span className="text-sm font-semibold cursor-pointer" style={{ color: C.accentDark }}>View All</span>}>
+    <SectionCard title="Recent Activity" action={onViewAll ? <button type="button" onClick={onViewAll} className="text-sm font-semibold cursor-pointer min-h-11 px-2" style={{ color: C.accentDark }}>View All</button> : null}>
       {activities.length === 0 ? (
         <EmptyState icon={Inbox} title="No activity yet" subtitle="Actions from your household will show up here." />
       ) : (
         <div className="space-y-1">
           {activities.slice(0, 6).map((a) => {
-            const Icon = ACTIVITY_ICON[a.kind];
-            const color = ACTIVITY_COLOR[a.kind];
+            // Activities can come from newer backend event types (for example
+            // shopping or comments). Keep the feed renderable even when the
+            // icon map has not been extended for a new event kind.
+            const Icon = ACTIVITY_ICON[a.kind] || Inbox;
+            const color = ACTIVITY_COLOR[a.kind] || C.info;
             return (
               <div key={a.id} className="flex items-center gap-3 py-2.5 rm-animate-in">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}1A` }}>
@@ -266,41 +287,47 @@ export function ActivityFeed({ activities }) {
 }
 
 /* ---------- shopping list ---------- */
-export function ShoppingRow({ item, onToggle, onDelete }) {
+export function ShoppingRow({ item, onToggle, onPurchase, onDelete, onEdit }) {
   return (
     <div className="flex items-center gap-3 py-2.5 group">
       <button
-        onClick={() => onToggle(item.id)}
-        className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+        type="button"
+        aria-label={item.purchased ? `Mark ${item.name} as not purchased` : `Record purchase for ${item.name}`}
+        onClick={() => (item.purchased ? onToggle(item.id) : onPurchase(item))}
+        className="w-11 h-11 rounded-md border-2 flex items-center justify-center shrink-0 cursor-pointer transition-colors"
         style={{ borderColor: item.purchased ? C.accent : C.border, background: item.purchased ? C.accent : 'transparent' }}
       >
-        {item.purchased && <Check size={13} color="#fff" className="rm-check-pop" />}
+        {item.purchased && <Check size={13} color="var(--on-accent)" className="rm-check-pop" />}
       </button>
       <span className={`text-sm flex-1 truncate ${item.purchased ? 'rm-strike' : ''}`} style={{ color: item.purchased ? undefined : C.text }}>
         {item.name}
       </span>
       {item.purchased ? (
-        <Badge color={C.accentDark} bg="#E6F5EF">Purchased</Badge>
+        <Badge color={C.accentDark} bg="var(--accent-soft)">Purchased</Badge>
       ) : (
         <Badge color={PRIORITY_META[item.priority].color} bg={PRIORITY_META[item.priority].bg}>{item.priority}</Badge>
       )}
-      <button onClick={() => onDelete(item.id)} className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shrink-0">
+      <button type="button" aria-label={`Delete ${item.name}`} onClick={() => onDelete(item.id)} className="min-w-11 min-h-11 flex items-center justify-center cursor-pointer shrink-0 md:opacity-70 md:group-hover:opacity-100 transition-opacity">
         <X size={14} color={C.textSec} />
+      </button>
+      <button type="button" onClick={() => onEdit(item)} className="min-w-11 min-h-11 flex items-center justify-center cursor-pointer shrink-0 md:opacity-70 md:group-hover:opacity-100 transition-opacity" aria-label={`Edit ${item.name}`}>
+        <Pencil size={14} color={C.textSec} />
       </button>
     </div>
   );
 }
 
-export function ShoppingList({ items, onToggle, onDelete, onAdd, compact, setPage }) {
+export function ShoppingList({ items, onToggle, onPurchase, onDelete, onEdit, onAdd, compact, setPage }) {
   const [text, setText] = useState('');
+  const [purchaseItem, setPurchaseItem] = useState(null);
   const list = compact ? items.slice(0, 5) : items;
   return (
-    <SectionCard title="Shopping List" action={!compact ? null : <span onClick={() => setPage('shopping')} className="text-sm font-semibold cursor-pointer" style={{ color: C.accentDark }}>View All</span>}>
+    <SectionCard title="Shopping List" action={!compact ? null : <button type="button" onClick={() => setPage('shopping')} className="text-sm font-semibold cursor-pointer min-h-11 px-2" style={{ color: C.accentDark }}>View All</button>}>
       {items.length === 0 ? (
         <EmptyState icon={ShoppingCart} title="List is empty" subtitle="Add something the household needs." />
       ) : (
         <div className="divide-y" style={{ borderColor: C.border }}>
-          {list.map((it) => <ShoppingRow key={it.id} item={it} onToggle={onToggle} onDelete={onDelete} />)}
+          {list.map((it) => <ShoppingRow key={it.id} item={it} onToggle={onToggle} onPurchase={setPurchaseItem} onDelete={onDelete} onEdit={onEdit} />)}
         </div>
       )}
       <div className="flex items-center gap-2 mt-4">
@@ -318,6 +345,11 @@ export function ShoppingList({ items, onToggle, onDelete, onAdd, compact, setPag
           Add
         </button>
       </div>
+      {purchaseItem && (
+        <Modal title="Record purchase" onClose={() => setPurchaseItem(null)}>
+          <PurchaseExpenseForm item={purchaseItem} onSubmit={onPurchase} onClose={() => setPurchaseItem(null)} />
+        </Modal>
+      )}
     </SectionCard>
   );
 }

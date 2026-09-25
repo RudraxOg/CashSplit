@@ -24,6 +24,10 @@ const GROUPS = [
     id: 'g1',
     name: 'My Household',
     simplifyDebts: true,
+    monthlyBudget: 30000,
+    plan: 'FREE',
+    trialStartedAt: '2026-08-01T00:00:00.000Z',
+    trialEndsAt: '2026-08-15T00:00:00.000Z',
     memberIds: MEMBERS.map((member) => member.id),
     createdAt: '2026-08-01T00:00:00.000Z',
   },
@@ -40,32 +44,32 @@ let expenses = [
 ];
 
 let incomes = [
-  { id: 1, source: 'Salary', amount: 12000, addedBy: 'Krishna', date: 'Aug 1' },
-  { id: 2, source: 'Salary', amount: 7500, addedBy: 'Aman', date: 'Aug 1' },
-  { id: 3, source: 'Freelance Work', amount: 5000, addedBy: 'Krishna', date: 'Aug 17' },
+  { id: 1, groupId: 'g1', source: 'Salary', amount: 12000, addedBy: 'Krishna', ownerName: 'Krishna', ownerUserId: 'krishna', incomeType: 'PERSONAL', date: 'Aug 1' },
+  { id: 2, groupId: 'g1', source: 'Salary', amount: 7500, addedBy: 'Aman', ownerName: 'Aman', ownerUserId: 'aman', incomeType: 'PERSONAL', date: 'Aug 1' },
+  { id: 3, groupId: 'g1', source: 'Freelance Work', amount: 5000, addedBy: 'Krishna', ownerName: 'Krishna', ownerUserId: 'krishna', incomeType: 'PERSONAL', date: 'Aug 17' },
 ];
 
 let chores = [
-  { id: 1, name: 'Cooking', assignedTo: 'Aman', status: 'completed', when: 'Today' },
-  { id: 2, name: 'Dishes', assignedTo: 'Krishna', status: 'pending', when: 'Today' },
-  { id: 3, name: 'Cleaning', assignedTo: 'Neha', status: 'pending', when: 'Today' },
-  { id: 4, name: 'Garbage', assignedTo: 'Rohit', status: 'upcoming', when: 'Today' },
-  { id: 5, name: 'Grocery Run', assignedTo: 'Krishna', status: 'upcoming', when: 'Friday' },
+  { id: 1, groupId: 'g1', name: 'Cooking', assignedTo: 'Aman', status: 'completed', when: 'Today' },
+  { id: 2, groupId: 'g1', name: 'Dishes', assignedTo: 'Krishna', status: 'pending', when: 'Today' },
+  { id: 3, groupId: 'g1', name: 'Cleaning', assignedTo: 'Neha', status: 'pending', when: 'Today' },
+  { id: 4, groupId: 'g1', name: 'Garbage', assignedTo: 'Rohit', status: 'upcoming', when: 'Today' },
+  { id: 5, groupId: 'g1', name: 'Grocery Run', assignedTo: 'Krishna', status: 'upcoming', when: 'Friday' },
 ];
 
 let shopping = [
-  { id: 1, name: 'Milk', priority: 'High', purchased: false },
-  { id: 2, name: 'Rice', priority: 'High', purchased: false },
-  { id: 3, name: 'Cooking Oil', priority: 'Medium', purchased: true },
-  { id: 4, name: 'Eggs', priority: 'Medium', purchased: false },
-  { id: 5, name: 'Detergent', priority: 'Low', purchased: false },
+  { id: 1, groupId: 'g1', name: 'Milk', priority: 'High', purchased: false },
+  { id: 2, groupId: 'g1', name: 'Rice', priority: 'High', purchased: false },
+  { id: 3, groupId: 'g1', name: 'Cooking Oil', priority: 'Medium', purchased: true },
+  { id: 4, groupId: 'g1', name: 'Eggs', priority: 'Medium', purchased: false },
+  { id: 5, groupId: 'g1', name: 'Detergent', priority: 'Low', purchased: false },
 ];
 
 let activity = [
-  { id: 1, kind: 'expense', text: 'Aman added an expense', detail: 'Groceries · ₹1,250', time: '2h ago' },
-  { id: 2, kind: 'chore', text: 'Neha completed a chore', detail: 'Cleaning', time: '5h ago' },
-  { id: 3, kind: 'income', text: 'You added income', detail: 'Freelance Work · ₹5,000', time: '1d ago' },
-  { id: 4, kind: 'settle', text: 'Rohit settled up with Aman', detail: 'Paid · ₹890', time: '2d ago' },
+  { id: 1, groupId: 'g1', kind: 'expense', text: 'Aman added an expense', detail: 'Groceries · ₹1,250', time: '2h ago' },
+  { id: 2, groupId: 'g1', kind: 'chore', text: 'Neha completed a chore', detail: 'Cleaning', time: '5h ago' },
+  { id: 3, groupId: 'g1', kind: 'income', text: 'You added income', detail: 'Freelance Work · ₹5,000', time: '1d ago' },
+  { id: 4, groupId: 'g1', kind: 'settle', text: 'Rohit settled up with Aman', detail: 'Paid · ₹890', time: '2d ago' },
 ];
 
 let balances = [
@@ -81,6 +85,7 @@ let expenseItems = [];
 let settlements = [];
 let expenseHistory = [];
 let expenseComments = [];
+let waitlistSignups = [];
 
 const MONTHLY = [
   { month: 'Mar', income: 21000, expenses: 16200 },
@@ -165,9 +170,13 @@ module.exports = {
   getExpenseHistory: (expenseId) => expenseHistory.filter((entry) => entry.expenseId === Number(expenseId)),
   addComment: (comment) => { expenseComments = [comment, ...expenseComments]; return comment; },
   getComments: (expenseId) => expenseComments.filter((comment) => comment.expenseId === Number(expenseId)),
+  getWaitlistSignups: () => waitlistSignups,
+  addWaitlistSignup: (signup) => { waitlistSignups = [signup, ...waitlistSignups]; return signup; },
   // incomes
   getIncomes: () => incomes,
   addIncome: (i) => { incomes = [i, ...incomes]; return i; },
+  updateIncome: (id, patch) => { let updated = null; incomes = incomes.map((item) => { if (item.id !== id) return item; updated = { ...item, ...patch }; return updated; }); return updated; },
+  deleteIncome: (id) => { incomes = incomes.filter((item) => item.id !== id); },
   // chores
   getChores: () => chores,
   addChore: (c) => { chores = [c, ...chores]; return c; },

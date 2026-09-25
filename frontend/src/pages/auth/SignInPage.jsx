@@ -1,0 +1,14 @@
+import React, { useEffect, useState } from 'react';
+import { AuthLayout } from '../../components/AuthLayout';
+import { useAuth } from '../../hooks/useAuth';
+import './auth.css';
+
+export default function SignInPage() {
+  const { session, loading: authLoading, signInWithPassword, signInWithMagicLink, signInWithGoogle } = useAuth();
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
+  const invite = new URLSearchParams(window.location.search).get('invite');
+  useEffect(() => { if (!authLoading && session) window.location.replace(invite ? `/join/${encodeURIComponent(invite)}` : '/app'); }, [authLoading, invite, session]);
+  const submit = async (event) => { event.preventDefault(); setError(''); setMessage(''); setBusy(true); try { await signInWithPassword({ email, password }); window.location.replace(invite ? `/join/${encodeURIComponent(invite)}` : '/app'); } catch (err) { setError(err.message || 'Invalid login credentials'); } finally { setBusy(false); } };
+  const magicLink = async () => { setError(''); setMessage(''); try { await signInWithMagicLink(email, invite); setMessage('Check your email for a sign-in link.'); } catch (err) { setError(err.message); } };
+  return <AuthLayout><h1>Yooo, welcome back!</h1><p className="rm-auth-sub">First time here? <a href={invite ? `/signup?invite=${encodeURIComponent(invite)}` : '/signup'}>Sign up for free</a></p><form onSubmit={submit}><label className="rm-auth-label" htmlFor="signin-email">Email</label><input id="signin-email" className="rm-auth-field" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required /><label className="rm-auth-label" htmlFor="signin-password">Password</label><input id="signin-password" className="rm-auth-field" type="password" autoComplete="current-password" placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} required /><div className="rm-auth-inline"><a href="/forgot-password">Forgot password?</a></div>{error && <p className="rm-auth-error" role="alert">{error}</p>}{message && <p className="rm-auth-success" role="status">{message}</p>}<button className="rm-auth-primary-btn" type="submit" disabled={busy || authLoading}>{busy ? 'Signing in…' : 'Sign in'}</button></form><button className="rm-auth-link-btn" onClick={magicLink} disabled={!email || busy}>Sign in using magic link</button><div className="rm-auth-divider"><span>or</span></div><button className="rm-auth-ghost-btn" onClick={() => { setBusy(true); signInWithGoogle(invite).catch((err) => { setError(err.message); setBusy(false); }); }} disabled={busy}>Continue with Google</button><p className="rm-auth-legal">By continuing, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p></AuthLayout>;
+}

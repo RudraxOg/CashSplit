@@ -11,11 +11,11 @@ export default function MembersPage({ members, balances }) {
           <div key={m.id} className="rm-card rm-card-hover p-5 flex flex-col items-center text-center">
             <Avatar member={m} size={56} />
             <p className="font-semibold mt-3" style={{ color: C.text }}>{m.name}{m.you ? ' (You)' : ''}</p>
-            <p className="text-xs rm-text-secondary mt-0.5">{m.you ? 'Household admin' : 'Roommate'}</p>
+            <p className="text-xs rm-text-secondary mt-0.5">{m.you ? 'Your account' : 'Roommate'}</p>
             {bal && (
               <span className="text-xs font-semibold mt-3 px-2.5 py-1 rounded-full" style={{
                 color: bal.settled ? C.textSec : (bal.type === 'gets' ? C.accentDark : C.expense),
-                background: bal.settled ? '#F1F3F0' : (bal.type === 'gets' ? '#E6F5EF' : '#FBEAEA'),
+                background: bal.settled ? 'var(--neutral-soft)' : (bal.type === 'gets' ? 'var(--accent-soft)' : 'var(--danger-soft)'),
               }}>
                 {bal.settled ? 'Settled up' : `${bal.type === 'gets' ? 'Gets back' : 'Owes'} ${inr(bal.amount)}`}
               </span>

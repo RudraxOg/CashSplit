@@ -10,9 +10,10 @@
     "frontend": "npm run dev:frontend",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix backend start",
-    "test": "npm --prefix backend test"
+    "test": "npm --prefix backend test && npm --prefix frontend test"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "supabase": "2.115.0"
   }
 }

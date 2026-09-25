@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { computeSplit, ValidationError } = require('../src/services/splitStrategies');
+const { computeSplit, applyReimbursement, ValidationError } = require('../src/services/splitStrategies');
 const { simplifyDebts } = require('../src/services/simplifyDebts');
 
 const sum = (shares) => Math.round(shares.reduce((total, share) => total + share.owedAmount, 0) * 100) / 100;
@@ -19,6 +19,12 @@ test('split strategies preserve the total to the cent', () => {
 test('invalid percentage and exact splits are rejected', () => {
   assert.throws(() => computeSplit('PERCENT', 100, [{ userId: 'a', percent: 20 }]), ValidationError);
   assert.throws(() => computeSplit('EXACT', 100, [{ userId: 'a', amount: 1 }]), ValidationError);
+});
+
+test('reimbursement shares preserve the total and reverse who owes whom', () => {
+  const shares = applyReimbursement(computeSplit('EQUAL', 100, [{ userId: 'payer' }, { userId: 'debtor' }]), 'payer');
+  assert.equal(sum(shares), 100);
+  assert.deepEqual(shares.map(({ userId, owedAmount }) => [userId, owedAmount]), [['payer', 150], ['debtor', -50]]);
 });
 
 test('debt simplification keeps the creditor/debtor totals', () => {

@@ -93,7 +93,11 @@ function computeSplit(splitType, totalAmount, input) {
 }
 
 function applyReimbursement(shares, payerId) {
-  return shares.map((share) => ({ ...share, owedAmount: share.userId === payerId ? share.owedAmount : -share.owedAmount }));
+  const total = shares.reduce((sum, share) => sum + cents(share.owedAmount), 0);
+  const others = shares.reduce((sum, share) => sum + (share.userId === payerId ? 0 : cents(share.owedAmount)), 0);
+  const reversed = shares.map((share) => ({ ...share, owedAmount: share.userId === payerId ? money(total + others) : -share.owedAmount }));
+  if (!reversed.some((share) => share.userId === payerId)) reversed.push({ userId: payerId, owedAmount: money(total + others) });
+  return reversed;
 }
 
 module.exports = { computeSplit, applyReimbursement, fixRoundingRemainder, ValidationError };

@@ -12,6 +12,7 @@ const supabase = config.SUPABASE_ENABLED
 async function optionalAuth(req, res, next) {
   const authorization = req.get('authorization');
   if (!authorization?.startsWith('Bearer ') || !supabase) {
+    if (supabase) return res.status(401).json({ error: 'authentication required' });
     req.user = { id: 'krishna', name: 'Krishna' };
     return next();
   }
@@ -22,8 +23,10 @@ async function optionalAuth(req, res, next) {
 }
 
 function requireAuth(req, res, next) {
-  if (!config.AUTH_REQUIRED) return optionalAuth(req, res, next);
-  return optionalAuth(req, res, (error) => error ? next(error) : (req.user?.id === 'krishna' ? res.status(401).json({ error: 'authentication required' }) : next()));
+  if (!config.AUTH_REQUIRED && !supabase) return optionalAuth(req, res, next);
+  if (!supabase) return res.status(503).json({ error: 'authentication service is not configured' });
+  if (!req.get('authorization')?.startsWith('Bearer ')) return res.status(401).json({ error: 'authentication required' });
+  return optionalAuth(req, res, next);
 }
 
 module.exports = { optionalAuth, requireAuth };

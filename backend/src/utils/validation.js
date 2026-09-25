@@ -41,7 +41,33 @@ function memberName(value, members) {
 
 const { z } = require('zod');
 
-const expenseSchema = z.object({}).passthrough();
+const expenseParticipantSchema = z.object({
+  userId: z.string().min(1),
+  amount: z.coerce.number().finite().nonnegative().optional(),
+  percent: z.coerce.number().finite().nonnegative().optional(),
+  shares: z.coerce.number().finite().nonnegative().optional(),
+  adjustment: z.coerce.number().finite().optional(),
+}).passthrough();
+const expenseSchema = z.object({
+  groupId: z.string().min(1).optional(),
+  description: z.string().trim().min(1).max(160).optional(),
+  note: z.string().trim().min(1).max(160).optional(),
+  totalAmount: z.coerce.number().finite().optional(),
+  amount: z.coerce.number().finite().optional(),
+  currency: z.enum(require('../services/currencies').CURRENCIES).optional(),
+  category: z.string().trim().min(1).max(80).optional(),
+  categoryId: z.string().trim().min(1).max(80).optional(),
+  splitType: z.enum(['EQUAL', 'SHARES', 'PERCENT', 'EXACT', 'ADJUSTMENT', 'ITEMIZED']).optional(),
+  participants: z.array(expenseParticipantSchema).min(1).optional(),
+  payers: z.array(z.object({ userId: z.string().min(1), paidAmount: z.coerce.number().finite().nonnegative() }).passthrough()).min(1).optional(),
+  items: z.array(z.object({ name: z.string().trim().min(1).max(160), price: z.coerce.number().finite().positive(), participants: z.array(z.object({ userId: z.string().min(1), shares: z.coerce.number().finite().positive().optional() }).passthrough()).min(1) }).passthrough()).optional(),
+  tax: z.coerce.number().finite().nonnegative().optional(),
+  tip: z.coerce.number().finite().nonnegative().optional(),
+  discount: z.coerce.number().finite().nonnegative().optional(),
+  reimbursement: z.boolean().optional(),
+  reimbursementPayerId: z.string().min(1).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).passthrough();
 const choreSchema = z.object({
   name: z.string().trim().min(1).max(120),
   assignedTo: z.string().trim().min(1).max(80),
@@ -51,6 +77,7 @@ const choreSchema = z.object({
   status: z.string().optional(),
 }).passthrough();
 const settlementSchema = z.object({
+  currency: z.enum(require('../services/currencies').CURRENCIES).default('INR'),
   groupId: z.string().min(1).optional(),
   fromUserId: z.string().min(1),
   toUserId: z.string().min(1),

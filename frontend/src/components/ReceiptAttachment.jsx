@@ -1,0 +1,9 @@
+import React, { useState } from 'react';
+import { api } from '../lib/api';
+export function ReceiptAttachment({ expense }) {
+  const [hasReceipt, setHasReceipt] = useState(expense.hasReceipt); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const run = async (operation) => { setBusy(true); setError(''); try { await operation(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
+  const upload = (file) => { if (!file) return; if (file.size > 5 * 1024 * 1024) return setError('Receipt must be under 5 MB.'); run(async () => { await api.uploadReceipt(expense.id, file); setHasReceipt(true); }); };
+  const download = () => run(async () => { const blob = await api.getReceipt(expense.id); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `receipt-${expense.id}.${blob.type === 'application/pdf' ? 'pdf' : blob.type === 'image/png' ? 'png' : 'jpg'}`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); });
+  return <section className="mt-4 pt-3 border-t" aria-label="Receipt"><label className="block text-xs font-semibold mb-2">{hasReceipt ? 'Replace receipt' : 'Attach receipt'}<input disabled={busy} className="block mt-2 text-xs w-full" type="file" accept="image/jpeg,image/png,application/pdf" onChange={(e) => upload(e.target.files[0])} /></label><p className="text-xs rm-text-secondary">JPEG, PNG, or PDF · up to 5 MB · visible only to household members</p>{hasReceipt && <div className="flex gap-2 mt-2"><button disabled={busy} className="rm-btn rm-btn-ghost text-xs px-3 py-2" onClick={download}>Download receipt</button><button disabled={busy} className="rm-btn rm-btn-ghost text-xs px-3 py-2" onClick={() => run(async () => { await api.deleteReceipt(expense.id); setHasReceipt(false); })}>Remove receipt</button></div>}{error && <p role="alert" className="text-sm text-red-700 mt-2">{error}</p>}</section>;
+}

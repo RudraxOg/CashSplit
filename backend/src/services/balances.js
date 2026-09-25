@@ -8,7 +8,8 @@ function membersForGroup(groupId) {
   return group ? group.memberIds.map((id) => store.MEMBERS.find((member) => member.id === id)).filter(Boolean) : store.MEMBERS;
 }
 
-function calculate(groupId = 'g1') {
+function calculate(groupId = 'g1', currency = 'INR') {
+  require('./currencies').currencyCode(currency);
   const expenses = store.getExpenses().filter((expense) => !expense.deletedAt && (expense.groupId || 'g1') === groupId);
   const settlements = store.getSettlements().filter((settlement) => (settlement.groupId || 'g1') === groupId);
   const pairMap = {};
@@ -36,6 +37,20 @@ function calculate(groupId = 'g1') {
     shares.forEach((share) => addNet(share.userId, -(share.owedAmountMinor ?? minor(share.owedAmount)), currency));
     const shareTotal = shares.reduce((sum, share) => sum + Math.abs(share.owedAmountMinor ?? minor(share.owedAmount)), 0);
     if (shareTotal <= 0) continue;
+    if (shares.some((share) => (share.owedAmountMinor ?? minor(share.owedAmount)) < 0)) {
+      const expenseNet = {};
+      payers.forEach((payer) => { expenseNet[payer.userId] = (expenseNet[payer.userId] || 0) + (payer.paidAmountMinor ?? minor(payer.paidAmount)); });
+      shares.forEach((share) => { expenseNet[share.userId] = (expenseNet[share.userId] || 0) - (share.owedAmountMinor ?? minor(share.owedAmount)); });
+      const debtors = Object.entries(expenseNet).filter(([, value]) => value < 0).map(([userId, value]) => ({ userId, amount: -value }));
+      const creditors = Object.entries(expenseNet).filter(([, value]) => value > 0).map(([userId, value]) => ({ userId, amount: value }));
+      for (const debtor of debtors) for (const creditor of creditors) {
+        const paid = Math.min(debtor.amount, creditor.amount);
+        if (paid > 0) addPair(debtor.userId, creditor.userId, paid, currency);
+        debtor.amount -= paid;
+        creditor.amount -= paid;
+      }
+      continue;
+    }
     payers.forEach((payer) => shares.forEach((share) => {
       const owed = Math.round(Math.abs(share.owedAmountMinor ?? minor(share.owedAmount)) / shareTotal * (payer.paidAmountMinor ?? minor(payer.paidAmount)));
       if ((share.owedAmountMinor ?? minor(share.owedAmount)) >= 0) addPair(share.userId, payer.userId, owed, currency);
@@ -64,12 +79,12 @@ function calculate(groupId = 'g1') {
   const uniquePairwise = pairwise.filter((entry, index, all) => !all.some((other, otherIndex) => otherIndex < index && other.currency === entry.currency && other.fromUserId === entry.toUserId && other.toUserId === entry.fromUserId));
   const members = membersForGroup(groupId);
   const name = (id) => members.find((member) => member.id === id)?.name || id;
-  const net = netByCurrency.INR || {};
+  const net = netByCurrency[currency] || {};
   const netRupees = Object.fromEntries(Object.entries(net).map(([userId, amount]) => [userId, amount / 100]));
   return {
-    currency: 'INR', currencies: Object.keys(netByCurrency), netByCurrency,
+    currency, currencies: Object.keys(netByCurrency), netByCurrency,
     net: members.map((member) => ({ userId: member.id, name: member.name, amount: round(netRupees[member.id] || 0), amountMinor: net[member.id] || 0, type: (net[member.id] || 0) >= 0 ? 'gets' : 'owes' })),
-    pairwise: uniquePairwise.map((entry) => ({ ...entry, fromName: name(entry.fromUserId), toName: name(entry.toUserId) })),
+    pairwise: uniquePairwise.filter((entry) => entry.currency === currency && entry.amount > 0).map((entry) => ({ ...entry, fromName: name(entry.fromUserId), toName: name(entry.toUserId) })),
     netMap: netRupees,
     netMaps: Object.fromEntries(Object.entries(netByCurrency).map(([currency, values]) => [currency, Object.fromEntries(Object.entries(values).map(([userId, amount]) => [userId, amount / 100]))])),
   };

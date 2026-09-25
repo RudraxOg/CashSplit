@@ -46,8 +46,36 @@ npm run install:all
 
 ### Start both services
 ```bash
-npm run dev         # frontend: http://localhost:5173, backend: http://localhost:4000
+npm run dev         # frontend: http://localhost:5173, backend: http://localhost:4317
 ```
+
+### Install RoomMate on a phone
+
+The production frontend is a Progressive Web App. Deploy it on HTTPS, open the
+site in Chrome on Android, and tap **Install app** (or use Chrome's menu →
+**Install app**). Chrome adds RoomMate to the home screen as a standalone
+WebAPK. On iPhone/iPad, open the site in Safari, tap **Share → Add to Home
+Screen**. The service worker caches only the application shell and static
+assets; it deliberately does not cache API responses or household financial
+data. Use `npm run build` to produce the frontend bundle in `frontend/dist`.
+
+Income entries can be **Personal** (assigned to one member and excluded from
+household income totals) or **Shared household income** (included in the
+household summary and reports). Apply
+`supabase/migrations/20260925170000_separate_personal_income.sql` before using that
+distinction with an existing Supabase database.
+
+To load repeatable Supabase demo data, run this from `backend/`:
+
+```bash
+npm run seed:supabase
+```
+
+The seed command creates three confirmed test accounts (`aman.seed@roommate.test`,
+`neha.seed@roommate.test`, and `rohit.seed@roommate.test`), connects them to the
+first household, and adds sample expenses, income, chores, shopping items, and
+activity records. It is safe to rerun; records are checked before insertion.
+The test accounts use `RoomMateDemo!2026` unless `SEED_USER_PASSWORD` is supplied.
 
 The root command starts both services and stops the other one if either process
 fails. To run them separately, use `npm run dev:backend` and
@@ -76,6 +104,46 @@ Supabase connection is active. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
 For the browser client, use the separate `frontend/.env` values
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; never copy the service-role
 key into a `VITE_*` variable.
+
+Apply both migrations in order before enabling persistent data:
+
+```bash
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
+
+The first migration creates the core household, expense ledger, settlement,
+history, activity, and chore tables. The second adds incomes, shopping items,
+indexes, updated-at triggers, read policies, and atomic expense create/update
+RPCs.
+
+Before opening the app, create at least one Supabase Auth user and matching
+`profiles`, `groups`, and `group_members` rows. The backend accepts the legacy
+`g1` alias during migration but stores persistent records with UUIDs. In
+production, set `AUTH_REQUIRED=true`; the frontend forwards the Supabase access
+token in the `Authorization` header.
+
+The backend uses Supabase only when `SUPABASE_ENABLED=true` and both credentials
+are present. Keep it `false` until the migrations and bootstrap records exist;
+this prevents an unprovisioned project from breaking the API. Tests set
+`NODE_ENV=test` and use the memory adapter for deterministic isolation. Never
+expose or commit the service-role key; rotate it immediately if it has been
+shared or committed.
+
+### Authentication lifecycle
+
+The frontend auth routes are `/signin`, `/signup`, `/forgot-password`,
+`/reset-password`, `/verify-email`, and `/app`. Supabase Auth persists the
+session, refreshes tokens, detects email/OAuth callback URLs, and signs out
+globally. The backend validates the bearer token when `AUTH_REQUIRED=true` and
+uses the token's UUID as `req.user.id`.
+
+Apply `20260828_auth_lifecycle.sql` after the earlier migrations. It creates the
+`auth.users` → `profiles` trigger, profile visibility/update policies, and
+member-scoped write policies. Configure Supabase Auth URL redirects for the
+frontend origins and enable Email; Google OAuth is used when the Google
+provider is enabled in the Supabase dashboard. Account deletion is handled by
+`POST /api/account/delete` using the server-only service-role key.
 
 Set `AUTH_REQUIRED=true` only after the frontend is sending Supabase access
 tokens. Local development remains available with `AUTH_REQUIRED=false`.
@@ -111,15 +179,40 @@ simplification at `GET /api/balances/g1/simplified`, and real settlements at
 | Activity | `GET /api/activity` |
 | Reports | `GET /api/reports/summary`, `GET /api/reports/monthly` |
 
-## Known gaps to close before shipping this for real
+## Remaining production work
 
-1. **No database** — data resets on server restart. Swap `store.js` for
-   Postgres/SQLite; every route file's imports stay the same.
-2. **No auth** — every request acts as "Krishna." Add a real auth
-   middleware and use `req.user` instead of a hardcoded name.
-3. **Settings page isn't wired up** — it's still local-only UI state
-   (there was no settings data in the original component to persist
-   either). Add a `/api/settings` route when you need it to stick.
-4. **No input sanitization beyond basic type/required checks** — fine for
-   a demo, not for production; add a schema validator (zod/joi) on the
-   POST routes.
+1. Configure production Supabase Auth SMTP if invite and account emails
+   should be delivered from a custom domain.
+2. Add browser-level coverage for confirmation redirects, invite acceptance,
+   expired tokens, and wrong-email rejection.
+3. Add schema validation middleware to every remaining write route before a
+   public production launch.
+## Group invitations
+
+Groups are private and join-by-invite, matching the product behavior we want for a household app. A signed-in group member opens **Groups → Invite a roommate**, enters the recipient email, and shares the generated seven-day link. The recipient can preview the group without authentication, then signs up or signs in. The invite token is preserved through Supabase email confirmation, and the API accepts it only when the authenticated email exactly matches the invited email. Acceptance inserts `group_members` and marks the invite accepted; it does not remove the user’s automatically-created personal household.
+
+Invite links use `PUBLIC_APP_URL` when set. Configure the same public frontend origin for CORS in the deployed API environment:
+
+```dotenv
+PUBLIC_APP_URL=https://your-roommate-app.example
+CORS_ORIGIN=https://your-roommate-app.example
+```
+
+If `PUBLIC_APP_URL` is unset, the link uses the app origin making the request. A browser opened at `localhost` can only produce a local-testing link; someone on another device needs a reachable deployment or LAN address. The Groups screen warns when the link is local. Add the public `/join/**` URL to Supabase Authentication → URL Configuration so signup and magic-link confirmation return to the invite. Creating an invite returns a copyable link; it does not send an email unless a mail delivery provider is configured separately. Re-inviting a still-pending email generates a fresh link and invalidates its earlier token.
+
+The database object is `public.group_invites`, created by `supabase/migrations/20260830_group_invites.sql`. Tokens are stored only as SHA-256 hashes, pending invites are unique per group/email, and RLS allows invite visibility only to the sender or intended recipient. The backend exposes:
+
+- `POST /api/groups/:groupId/invites` — create an invite (authenticated group member)
+- `GET /api/invites/:token` — safe public preview
+- `POST /api/invites/:token/accept` — accept (authenticated invited email)
+- `POST /api/invites/:token/decline` — decline (authenticated invited email)
+
+## Chore planner
+
+The Chores page has a seven-day planner with a date picker for any future day. Choose a day, then **Plan a chore** to open the assignment form with that due date already selected. **Previously assigned** shows earlier chores for the selected roommate, including completed and overdue work. The planner uses the existing `chores` table and household membership; it needs no extra migration.
+
+## Vercel deployment
+
+The root `vercel.json` deploys the Vite frontend and Express API as two Vercel Services on one domain. The `/api/**` path reaches Express and other paths reach the frontend; the frontend service serves `index.html` for direct app and invite links. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ENABLED=true`, `AUTH_REQUIRED=true`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL=/api`, `PUBLIC_APP_URL`, and `CORS_ORIGIN` in the Vercel project. The service-role key stays server-side. Add the production `/join/**` redirect to Supabase Auth URL Configuration so email confirmation and magic-link flows return to the invitation.
+
+The migration is already applied to the linked Supabase project. In Supabase Authentication → URL Configuration, keep the local and production origins allowed, including `/join/**`. Configure Supabase Auth SMTP before production if invitation recipients should receive email automatically; the current product intentionally returns a copyable link so the flow works without coupling group membership to a third-party mail provider.
